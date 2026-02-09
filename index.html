@@ -378,15 +378,41 @@
                     <input type="text" name="name" required class="w-full px-4 py-3 rounded-lg bg-white border border-gray-200 focus:border-wedding-pink focus:ring-2 focus:ring-wedding-pink/20 outline-none transition" placeholder="請輸入全名">
                 </div>
 
+                <!-- 修改：拆分人數欄位 -->
                 <div>
-                    <label class="block text-gray-700 font-bold mb-2">預計出席人數</label>
+                    <label class="block text-gray-700 font-bold mb-2">大人人數</label>
                     <select name="count" class="w-full px-4 py-3 rounded-lg bg-white border border-gray-200 focus:border-wedding-pink focus:ring-2 focus:ring-wedding-pink/20 outline-none transition">
                         <option value="1">1 位</option>
                         <option value="2">2 位</option>
                         <option value="3">3 位</option>
                         <option value="4">4 位</option>
-                        <option value="more">4 位以上</option>
+                        <option value="5">5 位</option>
+                        <option value="more">5 位以上</option>
                     </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <!-- 新增：兒童座椅 -->
+                    <div>
+                        <label class="block text-gray-700 font-bold mb-2">需兒童座椅</label>
+                        <select name="baby_chair" class="w-full px-4 py-3 rounded-lg bg-white border border-gray-200 focus:border-wedding-pink focus:ring-2 focus:ring-wedding-pink/20 outline-none transition">
+                            <option value="0">不需要</option>
+                            <option value="1">1 張</option>
+                            <option value="2">2 張</option>
+                            <option value="3">3 張</option>
+                        </select>
+                    </div>
+                    <!-- 新增：素食需求 -->
+                    <div>
+                        <label class="block text-gray-700 font-bold mb-2">素食人數</label>
+                        <select name="vegetarian" class="w-full px-4 py-3 rounded-lg bg-white border border-gray-200 focus:border-wedding-pink focus:ring-2 focus:ring-wedding-pink/20 outline-none transition">
+                            <option value="0">0 位</option>
+                            <option value="1">1 位</option>
+                            <option value="2">2 位</option>
+                            <option value="3">3 位</option>
+                            <option value="more">3 位以上</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div>
@@ -568,6 +594,24 @@
             spinner.classList.remove('hidden');
 
             const formData = new FormData(form);
+            
+            // 聰明的小功能：
+            // 將「需兒童座椅」和「素食人數」的資料，自動合併到「備註」欄位
+            // 這樣就算您沒有修改 Google Apps Script，這些新資訊也會一併被記錄下來！
+            const baby = formData.get('baby_chair');
+            const veg = formData.get('vegetarian');
+            let remarks = formData.get('remarks') || "";
+            
+            let extraInfo = [];
+            if(baby && baby !== '0') extraInfo.push(`兒童椅:${baby}張`);
+            if(veg && veg !== '0') extraInfo.push(`素食:${veg}人`);
+            
+            if(extraInfo.length > 0) {
+                // 如果原本就有備註，先空一行再加
+                remarks = remarks ? remarks + " (" + extraInfo.join(", ") + ")" : "(" + extraInfo.join(", ") + ")";
+                formData.set('remarks', remarks);
+            }
+
             const searchParams = new URLSearchParams(formData);
 
             fetch(googleAppsScriptURL, {
@@ -624,21 +668,29 @@
             resultContainer.classList.remove('hidden');
             loading.classList.remove('hidden');
             resultText.innerText = '';
+            // 重置錯誤訊息顏色
+            resultText.style.color = ""; 
             generateBtn.disabled = true;
             generateBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
             // 填入您的 API Key
-            const apiKey = "AIzaSyBk_tRJBj3Idmt5Al_CuofNikA-F3Ba86E"; 
+            const apiKey = "AIzaSyBqqOa_J72cg2kCmtsYyPLASR5NwoI0d7A"; 
             const prompt = `寫一句給新人 "振翰 & 佩吟" 的結婚祝福。我是新人的${relation}，希望語氣是${style}。請使用繁體中文，長度約30-50字，不要包含標題。`;
 
             try {
+                // 修改處：將模型改為 gemini-2.5-flash-preview-09-2025，這通常能解決 "not found" 的問題
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
                 });
 
-                if (!response.ok) throw new Error('API request failed');
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    // 顯示更詳細的錯誤訊息給您看
+                    throw new Error(errorData.error?.message || 'API request failed with status ' + response.status);
+                }
+                
                 const data = await response.json();
                 const text = data.candidates[0].content.parts[0].text;
                 
@@ -656,7 +708,9 @@
             } catch (error) {
                 console.error(error);
                 loading.classList.add('hidden');
-                resultText.innerText = "哎呀，AI 靈感枯竭了，請再試一次！";
+                // 顯示錯誤原因，方便除錯
+                resultText.innerText = "連線問題：" + error.message; 
+                resultText.style.color = "#e53e3e"; // 紅色字體
             } finally {
                 generateBtn.disabled = false;
                 generateBtn.classList.remove('opacity-50', 'cursor-not-allowed');
